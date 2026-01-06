@@ -22,7 +22,7 @@ from database import store_measurement
 
 
 class MiScaleDataExtractor:
-    def __init__(self, address: str, age: int = AGE, height_cm: float = HEIGHT_CM, gender: str = GENDER):
+    def __init__(self, address: str, age: int = AGE, height_cm: float = HEIGHT_CM, gender: str = GENDER, status_callback=None):
         self.address = address
         self.is_running = True
         self.age = age
@@ -31,7 +31,13 @@ class MiScaleDataExtractor:
         self.recent_readings = []
         self.reading_timestamps = []
         self.stable_start_time = None 
-        self.measurement_stored = False 
+        self.measurement_stored = False
+        self.status_callback = status_callback 
+        
+    def _emit_status(self, message: str, level: str = "info"):
+        """Emit a status message via callback if available."""
+        if self.status_callback:
+            self.status_callback(message, level)
 
     def _is_measurement_stable(self, weight: float) -> bool:
         """Check if the measurement is stable based on recent readings and duration."""
@@ -85,18 +91,19 @@ class MiScaleDataExtractor:
                 
                 if success:
                     self.measurement_stored = True
+                    success_msg = f"✅ MEASUREMENT STORED SUCCESSFULLY\n"
+                    success_msg += f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    success_msg += f"Weight: {measurement['weight']:.2f} kg\n"
+                    success_msg += f"Impedance: {measurement['impedance']}\n"
+                    success_msg += f"BMI: {measurement['bmi']:.2f}\n"
+                    success_msg += f"BMR: {measurement['bmr']:.2f} kcal/day\n"
+                    success_msg += f"Body Fat %: {measurement['body_fat']:.2f}%\n"
+                    success_msg += "✅ Measurement saved to database. You can step off the scale."
+                    
                     print("\n" + "="*50)
-                    print("✅ MEASUREMENT STORED SUCCESSFULLY")
-                    print("="*50)
-                    print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                    print(f"Weight: {measurement['weight']:.2f} kg")
-                    print(f"Impedance: {measurement['impedance']}")
-                    print(f"BMI: {measurement['bmi']:.2f}")
-                    print(f"BMR: {measurement['bmr']:.2f} kcal/day")
-                    print(f"Body Fat %: {measurement['body_fat']:.2f}%")
-                    print("="*50)
-                    print("\n✅ Measurement saved to database. You can step off the scale.")
-                    print("   Press Ctrl+C to exit.\n")
+                    print(success_msg)
+                    print("="*50 + "\n")
+                    self._emit_status(success_msg, "success")
                     
                     self.is_running = False
             else:
@@ -111,13 +118,19 @@ class MiScaleDataExtractor:
                     progress_msg = f"⏳ Stabilizing measurement... ({readings_count}/{STABLE_READINGS_REQUIRED} readings, weight: {weight:.2f} kg)"
                 
                 print(progress_msg, end='\r')
+                self._emit_status(progress_msg, "progress")
                 
         except Exception as e:
-            print(f"\n❌ Error processing measurement: {e}")
+            error_msg = f"❌ Error processing measurement: {e}"
+            print(f"\n{error_msg}")
+            self._emit_status(error_msg, "error")
         
 
     async def discover_scale(self) -> Optional[str]:
-        print(f"🔍 Starting BLE scan for Mi Scale (Service UUID: {MI_SCALE_SERVICE_UUID})...")
+        msg = f"🔍 Starting BLE scan for Mi Scale (Service UUID: {MI_SCALE_SERVICE_UUID})..."
+        print(msg)
+        self._emit_status(msg, "info")
+        
         devices = await BleakScanner.discover(
             service_uuids=[MI_SCALE_SERVICE_UUID],
             timeout=10.0
@@ -126,10 +139,14 @@ class MiScaleDataExtractor:
         if devices:
             device = devices[0]
             self.address = device.address
-            print(f"✅ Found Mi Scale: **{device.address}** ({device.name})")
+            msg = f"✅ Found Mi Scale: {device.address} ({device.name})"
+            print(msg)
+            self._emit_status(msg, "success")
             return device.address
         else:
-            print("❌ No Mi Scale devices found after scanning for 10 seconds.")
+            msg = "❌ No Mi Scale devices found after scanning for 10 seconds."
+            print(msg)
+            self._emit_status(msg, "error")
             return None
 
     async def run_extractor(self):
@@ -142,24 +159,39 @@ class MiScaleDataExtractor:
         try:
             async with BleakClient(self.address) as client:
                 if not client.is_connected:
-                    print("❌ Failed to connect to the Mi Scale.")
+                    msg = "❌ Failed to connect to the Mi Scale."
+                    print(msg)
+                    self._emit_status(msg, "error")
                     return
 
-                print(f"✅ Successfully connected to Mi Scale at {self.address}.")
-                print(f"⏳ Subscribing to measurement characteristic...")
+                msg = f"✅ Successfully connected to Mi Scale at {self.address}."
+                print(msg)
+                self._emit_status(msg, "success")
+                
+                msg = "⏳ Subscribing to measurement characteristic..."
+                print(msg)
+                self._emit_status(msg, "info")
+                
                 await client.start_notify(
                     MI_MEASUREMENT_CHARACTERISTIC_UUID,
                     self._handle_measurement
                 )
-                print("\n   *** DATA EXTRACTOR IS RUNNING. PLEASE STEP ON THE SCALE NOW. ***")
+                
+                msg = "*** DATA EXTRACTOR IS RUNNING. PLEASE STEP ON THE SCALE NOW. ***"
+                print(f"\n   {msg}")
                 print("   (Press Ctrl+C to stop listening at any time)")
+                self._emit_status(msg, "info")
                 
                 while self.is_running:
                     await asyncio.sleep(1) 
 
         except Exception as e:
-            print(f"❌ An error occurred during BLE operation: {e}")
+            msg = f"❌ An error occurred during BLE operation: {e}"
+            print(msg)
+            self._emit_status(msg, "error")
             
         finally:
-            print("\nData extraction process finished.")
+            msg = "Data extraction process finished."
+            print(f"\n{msg}")
+            self._emit_status(msg, "info")
 

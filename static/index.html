@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Scale Data Extractor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .status-running {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-idle {
+            background: #6b7280;
+            color: white;
+        }
+
+        .status-error {
+            background: #ef4444;
+            color: white;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        button.stop {
+            background: #ef4444;
+        }
+
+        button.stop:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .measurements-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .measurements-table th,
+        .measurements-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .measurements-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .measurements-table tr:hover {
+            background: #f9fafb;
+        }
+
+        .last-measurement {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metric {
+            text-align: center;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #6b7280;
+        }
+
+        .status-log {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .status-log-entry {
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border-left: 3px solid transparent;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status-log-entry.info {
+            background: #eff6ff;
+            border-left-color: #3b82f6;
+            color: #1e40af;
+        }
+
+        .status-log-entry.success {
+            background: #f0fdf4;
+            border-left-color: #10b981;
+            color: #065f46;
+        }
+
+        .status-log-entry.error {
+            background: #fef2f2;
+            border-left-color: #ef4444;
+            color: #991b1b;
+        }
+
+        .status-log-entry.progress {
+            background: #fffbeb;
+            border-left-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .status-log-timestamp {
+            font-size: 11px;
+            color: #6b7280;
+            margin-right: 8px;
+        }
+
+        .status-log-empty {
+            text-align: center;
+            color: #9ca3af;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚖️ Mi Scale Data Extractor</h1>
+            <p>Web interface for extracting and viewing measurements from your Xiaomi Mi Scale</p>
+            <div id="status" class="status-badge status-idle">Idle</div>
+        </div>
+
+        <div class="card">
+            <h2>Controls</h2>
+            <div class="controls">
+                <button id="startBtn" onclick="startMeasurement()">Start Measurement</button>
+                <button id="stopBtn" class="stop" onclick="stopMeasurement()" disabled>Stop Measurement</button>
+                <button onclick="refreshMeasurements()">Refresh Data</button>
+            </div>
+            <div id="errorContainer"></div>
+        </div>
+
+        <div class="card">
+            <h2>Status Log</h2>
+            <div id="statusLog" class="status-log">
+                <div class="status-log-empty">No status messages yet. Start a measurement to see real-time updates.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Last Measurement</h2>
+            <div id="lastMeasurement">
+                <div class="loading">No measurements yet. Start a measurement to begin.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Measurement History</h2>
+            <div id="measurementsContainer">
+                <div class="loading">Loading measurements...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let statusCheckInterval;
+        let eventSource = null;
+
+        function addStatusMessage(message, level, timestamp) {
+            const statusLog = document.getElementById('statusLog');
+            
+            const emptyMsg = statusLog.querySelector('.status-log-empty');
+            if (emptyMsg) {
+                emptyMsg.remove();
+            }
+            
+            const entry = document.createElement('div');
+            entry.className = `status-log-entry ${level}`;
+            
+            const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="status-log-timestamp">[${timeStr}]</span>${message.replace(/\n/g, '<br>')}`;
+            
+            statusLog.insertBefore(entry, statusLog.firstChild);
+            
+            while (statusLog.children.length > 50) {
+                statusLog.removeChild(statusLog.lastChild);
+            }
+            
+            statusLog.scrollTop = 0;
+        }
+
+        function connectStatusStream() {
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            eventSource = new EventSource('/api/status/stream');
+            
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    addStatusMessage(data.message, data.level, data.timestamp);
+                } catch (e) {
+                    console.error('Error parsing status message:', e);
+                }
+            };
+            
+            eventSource.onerror = function(error) {
+                console.error('SSE connection error:', error);
+                setTimeout(() => {
+                    if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+                        connectStatusStream();
+                    }
+                }, 3000);
+            };
+        }
+
+        function disconnectStatusStream() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+        }
+
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response');
+                }
+                const status = await response.json();
+                
+                const statusBadge = document.getElementById('status');
+                const startBtn = document.getElementById('startBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                
+                if (status.is_running) {
+                    statusBadge.textContent = 'Running - Step on the scale!';
+                    statusBadge.className = 'status-badge status-running';
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                } else {
+                    statusBadge.textContent = 'Idle';
+                    statusBadge.className = 'status-badge status-idle';
+                    startBtn.disabled = false;
+                    stopBtn.disabled = true;
+                }
+
+                if (status.error) {
+                    statusBadge.textContent = 'Error';
+                    statusBadge.className = 'status-badge status-error';
+                    showError(status.error);
+                } else {
+                    clearError();
+                }
+
+                if (status.last_measurement) {
+                    displayLastMeasurement(status.last_measurement);
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        async function startMeasurement() {
+            try {
+                const statusLog = document.getElementById('statusLog');
+                statusLog.innerHTML = '<div class="status-log-empty">Connecting...</div>';
+                connectStatusStream();
+                
+                console.log('Starting measurement...');
+                const response = await fetch('/api/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                console.log('Response status:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    let errorMessage = 'Failed to start measurement';
+                    const contentType = response.headers.get('content-type');
+                    console.log('Response content-type:', contentType);
+                    
+                    if (contentType && contentType.includes('application/json')) {
+                        try {
+                            const error = await response.json();
+                            console.log('Error response:', error);
+                            errorMessage = error.error || error.detail || errorMessage;
+                        } catch (e) {
+                            console.error('Error parsing JSON error response:', e);
+                            errorMessage = response.statusText || errorMessage;
+                        }
+                    } else {
+                        try {
+                            const text = await response.text();
+                            console.log('Error response text:', text);
+                            errorMessage = text || response.statusText || errorMessage;
+                        } catch (e) {
+                            console.error('Error reading error response text:', e);
+                            errorMessage = response.statusText || errorMessage;
+                        }
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                const result = await response.json();
+                console.log('Measurement started successfully:', result);
+                
+                clearError();
+                updateStatus();
+                refreshMeasurements();
+            } catch (error) {
+                console.error('Error in startMeasurement:', error);
+                showError(error.message);
+                disconnectStatusStream();
+            }
+        }
+
+        async function stopMeasurement() {
+            try {
+                const response = await fetch('/api/stop', {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    let errorMessage = 'Failed to stop measurement';
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        try {
+                            const error = await response.json();
+                            errorMessage = error.detail || error.error || errorMessage;
+                        } catch (e) {
+                            errorMessage = response.statusText || errorMessage;
+                        }
+                    } else {
+                        try {
+                            const text = await response.text();
+                            errorMessage = text || response.statusText || errorMessage;
+                        } catch (e) {
+                            errorMessage = response.statusText || errorMessage;
+                        }
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                clearError();
+                updateStatus();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        async function refreshMeasurements() {
+            try {
+                const response = await fetch('/api/measurements?limit=50');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response');
+                }
+                const measurements = await response.json();
+                displayMeasurements(measurements);
+            } catch (error) {
+                console.error('Error fetching measurements:', error);
+                document.getElementById('measurementsContainer').innerHTML = 
+                    `<div class="error-message">Error loading measurements: ${error.message}</div>`;
+            }
+        }
+
+        function displayLastMeasurement(measurement) {
+            const container = document.getElementById('lastMeasurement');
+            container.innerHTML = `
+                <div class="last-measurement">
+                    <div class="metric">
+                        <div class="metric-label">Weight</div>
+                        <div class="metric-value">${measurement.weight.toFixed(2)} kg</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">BMI</div>
+                        <div class="metric-value">${measurement.bmi.toFixed(2)}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Body Fat</div>
+                        <div class="metric-value">${measurement.body_fat_percentage.toFixed(1)}%</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">BMR</div>
+                        <div class="metric-value">${measurement.bmr.toFixed(0)} kcal</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Impedance</div>
+                        <div class="metric-value">${measurement.impedance}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Time</div>
+                        <div class="metric-value" style="font-size: 14px;">${new Date(measurement.timestamp).toLocaleString()}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayMeasurements(measurements) {
+            const container = document.getElementById('measurementsContainer');
+            
+            if (measurements.length === 0) {
+                container.innerHTML = '<div class="loading">No measurements found.</div>';
+                return;
+            }
+
+            let html = '<table class="measurements-table"><thead><tr>';
+            html += '<th>Timestamp</th><th>Weight (kg)</th><th>BMI</th><th>Body Fat (%)</th><th>BMR (kcal)</th><th>Impedance</th>';
+            html += '</tr></thead><tbody>';
+
+            measurements.forEach(m => {
+                html += `<tr>
+                    <td>${new Date(m.timestamp).toLocaleString()}</td>
+                    <td>${m.weight.toFixed(2)}</td>
+                    <td>${m.bmi.toFixed(2)}</td>
+                    <td>${m.body_fat_percentage.toFixed(1)}</td>
+                    <td>${m.bmr.toFixed(0)}</td>
+                    <td>${m.impedance}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="error-message">Error: ${message}</div>`;
+        }
+
+        function clearError() {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = '';
+        }
+        
+        updateStatus();
+        refreshMeasurements();
+        connectStatusStream();
+        
+        statusCheckInterval = setInterval(updateStatus, 2000);
+        
+        setInterval(refreshMeasurements, 10000);
+        
+        window.addEventListener('beforeunload', () => {
+            disconnectStatusStream();
+        });
+    </script>
+</body>
+</html>
+
