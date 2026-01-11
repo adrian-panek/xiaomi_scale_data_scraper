@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scale-scraper
+  labels:
+    app: scale-scraper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scale-scraper
+  template:
+    metadata:
+      labels:
+        app: scale-scraper
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/scale-scraper: unconfined
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: scale-scraper
+        image: adrianpanek/weight_scale_scraper:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          hostPort: 8000
+          protocol: TCP
+          name: http
+        envFrom:
+          - configMapRef:
+              name: scale-scraper-config
+        volumeMounts:
+        - name: dbus-system
+          mountPath: /run/dbus
+          readOnly: true
+        - name: dbus-system-var
+          mountPath: /var/run/dbus
+          readOnly: true
+        - name: bluetooth-dev
+          mountPath: /dev
+        - name: bluetooth-sys
+          mountPath: /sys/class/bluetooth
+          readOnly: true
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: dbus-system
+        hostPath:
+          path: /run/dbus
+          type: Directory
+      - name: dbus-system-var
+        hostPath:
+          path: /var/run/dbus
+          type: Directory
+      - name: bluetooth-dev
+        hostPath:
+          path: /dev
+          type: Directory
+      - name: bluetooth-sys
+        hostPath:
+          path: /sys/class/bluetooth
+          type: Directory
+      - name: data
+        emptyDir: {}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: node-type
+                  operator: In
+                  values:
+                  - bluetooth-worker
