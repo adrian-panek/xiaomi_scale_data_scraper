@@ -21,7 +21,7 @@ spec:
       containers:
       - name: scale-scraper
         image: adrianpanek/weight_scale_scraper:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
           hostPort: 8000
@@ -30,6 +30,12 @@ spec:
         envFrom:
           - configMapRef:
               name: scale-scraper-config
+        env:
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: db-secret
+                key: postgres-password
         volumeMounts:
         - name: dbus-system
           mountPath: /run/dbus

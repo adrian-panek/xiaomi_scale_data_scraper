@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-config
+data:
+  DB_HOST: "db"
+  DB_PORT: "5432"
+  DB_NAME: "scaledb"
+  DB_USER: "scaleuser"

@@ -1,20 +1,23 @@
 """Database operations for storing measurements."""
 
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from typing import List, Dict, Any
-from config import DB_PATH
+from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
 
+def get_connection():
+    return psycopg2.connect(database=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT)
 
-def init_database(db_path: str = DB_PATH):
-    """Initialize the SQLite database and create measurements table if it doesn't exist."""
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+def init_database():
+    """Initialize the PostgreSQL database and create measurements table if it doesn't exist."""
+    connection = get_connection()
+    cursor = connection.cursor()
     
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS measurements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME NOT NULL,
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
             weight REAL NOT NULL,
             impedance INTEGER NOT NULL,
             bmi REAL NOT NULL,
@@ -27,38 +30,37 @@ def init_database(db_path: str = DB_PATH):
         CREATE INDEX IF NOT EXISTS idx_timestamp ON measurements(timestamp)
     ''')
     
-    conn.commit()
-    conn.close()
-    print(f"✅ Database initialized: {db_path}")
+    connection.commit()
+    connection.close()
+    print(f"✅ Database initialized: {DB_NAME}")
 
 
 def store_measurement(weight: float, impedance: int, bmi: float, bmr: float, 
-                     body_fat: float, db_path: str = DB_PATH) -> bool:
+                     body_fat: float) -> bool:
     """Store a single measurement in the database."""
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        connection = get_connection()
+        cursor = connection.cursor()
         
         cursor.execute('''
             INSERT INTO measurements 
             (timestamp, weight, impedance, bmi, bmr, body_fat_percentage)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (datetime.now().isoformat(), weight, impedance, bmi, bmr, body_fat))
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (datetime.now(), weight, impedance, bmi, bmr, body_fat))
         
-        conn.commit()
-        conn.close()
+        connection.commit()
+        connection.close()
         return True
     except Exception as e:
         print(f"❌ Error storing measurement: {e}")
         return False
 
 
-def get_all_measurements(db_path: str = DB_PATH) -> List[Dict[str, Any]]:
+def get_all_measurements() -> List[Dict[str, Any]]:
     """Get all measurements from the database, ordered by timestamp descending."""
     try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        connection = get_connection()
+        cursor = connection.cursor(cursor_factory=RealDictCursor)
         
         cursor.execute('''
             SELECT id, timestamp, weight, impedance, bmi, bmr, body_fat_percentage
@@ -67,54 +69,31 @@ def get_all_measurements(db_path: str = DB_PATH) -> List[Dict[str, Any]]:
         ''')
         
         rows = cursor.fetchall()
-        conn.close()
+        connection.close()
         
-        return [
-            {
-                "id": row["id"],
-                "timestamp": row["timestamp"],
-                "weight": row["weight"],
-                "impedance": row["impedance"],
-                "bmi": row["bmi"],
-                "bmr": row["bmr"],
-                "body_fat_percentage": row["body_fat_percentage"]
-            }
-            for row in rows
-        ]
+        return [dict(row) for row in rows]
     except Exception as e:
         print(f"❌ Error retrieving measurements: {e}")
         return []
 
 
-def get_recent_measurements(limit: int = 10, db_path: str = DB_PATH) -> List[Dict[str, Any]]:
+def get_recent_measurements(limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent measurements from the database, ordered by timestamp descending."""
     try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        connection = get_connection()
+        cursor = connection.cursor(cursor_factory=RealDictCursor)
         
         cursor.execute('''
             SELECT id, timestamp, weight, impedance, bmi, bmr, body_fat_percentage
             FROM measurements
             ORDER BY timestamp DESC
-            LIMIT ?
+            LIMIT %s
         ''', (limit,))
         
         rows = cursor.fetchall()
-        conn.close()
+        connection.close()
         
-        return [
-            {
-                "id": row["id"],
-                "timestamp": row["timestamp"],
-                "weight": row["weight"],
-                "impedance": row["impedance"],
-                "bmi": row["bmi"],
-                "bmr": row["bmr"],
-                "body_fat_percentage": row["body_fat_percentage"]
-            }
-            for row in rows
-        ]
+        return [dict(row) for row in rows]
     except Exception as e:
         print(f"❌ Error retrieving recent measurements: {e}")
         return []
